@@ -56,6 +56,16 @@ for arg; do
     esac
 done
 
+if $verbose; then
+    echo "username = $username"
+    echo "format   = $format"
+    echo "verbose  = $verbose"
+    echo "quiet    = $quiet"
+    echo "action   = $action"
+    echo "fast     = $fast"
+    echo "each     = $each"
+fi
+
 sub()
 {
     echo 's/\([^%]\|^\)'"$1"'/\1'"$2"'/g'
@@ -183,6 +193,8 @@ func_cat()
 funcs="$(func_cat get_users uniq_users n_users n_uniq_users meminfo mem_avail \
     cpuinfo n_cpus load_avgs load_avgs_avg get_rating)"
 
+! $verbose || echo "$funcs" >&2
+
 do_ssh()
 {
     machine="$1"
@@ -205,7 +217,11 @@ do_ssh()
     ! $verbose || echo "MACHINE: $machine" >&2
     ! $verbose || echo "COMMAND: $2" >&2
 
-    $ssh_cmd "$machine" "$cmd"
+    result="$($ssh_cmd "$machine" "$cmd")"
+
+    ! $verbose || echo "RESULT:  $result" >&2
+
+    echo "$result"
 }
 
 machines="$(get_machines)"
@@ -240,6 +256,7 @@ case "$action" in
 
     (list)
         tmpdir="$(mktemp -d)"
+        ! $verbose || echo "tmpdir = $tmpdir" >&2
         for machine in $machines; do
             do_ssh "$machine" 'echo $(n_uniq_users) $(uniq_users)' \
                 >"$tmpdir/$machine" &
