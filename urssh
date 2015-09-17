@@ -186,10 +186,18 @@ funcs="$(func_cat get_users uniq_users n_users n_uniq_users meminfo mem_avail \
 do_ssh()
 {
     machine="$1"
+    ssh_cmd=ssh
+    if $fast; then
+        ssh_cmd="timeout 2 ssh"
+    fi
 
-    if ! ssh "$machine" true 2>/dev/null; then
+    if ! $ssh_cmd "$machine" true 2>/dev/null; then
         $quiet || echo "Unable to ssh into $(format_machine "$machine")" >&2
         return 1
+    fi
+
+    if $fast; then
+        ssh_cmd="timeout 3 ssh"
     fi
 
     cmd="$(cat <(echo "$funcs") <(echo "$2"))"
@@ -197,17 +205,7 @@ do_ssh()
     ! $verbose || echo "MACHINE: $machine" >&2
     ! $verbose || echo "COMMAND: $2" >&2
 
-    ssh "$machine" "$cmd"
-}
-
-wait_for_children()
-{
-    if $fast; then
-        sleep 5
-        pkill -P $$
-    else
-        wait
-    fi
+    $ssh_cmd "$machine" "$cmd"
 }
 
 machines="$(get_machines)"
@@ -223,9 +221,9 @@ case "$action" in
         else
             tmpdir="$(mktemp -d)"
             for machine in $machines; do
-                do_ssh "$machine" get_rating >"$tmpdir/$machine" &
+                timeout 5 do_ssh "$machine" get_rating >"$tmpdir/$machine" &
             done
-            wait_for_children
+            wait
             min=1000
             minmachine=
             for machine in $machines; do
@@ -246,7 +244,7 @@ case "$action" in
             do_ssh "$machine" 'echo $(n_uniq_users) $(uniq_users)' \
                 >"$tmpdir/$machine" &
         done
-        wait_for_children
+        wait
         for machine in $machines; do
             info="$(cat "$tmpdir/$machine")"
             [ -n "$info" ] && echo "$(format_machine "$machine") $info"
