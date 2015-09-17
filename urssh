@@ -31,10 +31,12 @@ for arg; do
 
         (--fast|-f)
             fast=true
+            each=false
             ;;
 
         (--each|-e)
             each=true
+            fast=false
             ;;
 
         (--all|-a)
@@ -47,6 +49,15 @@ for arg; do
 
         (--format=*)
             format="$(awk -F= '{print $2}' <<< "$arg")"
+            ;;
+
+        (--help|-h)
+            cat <<EOF
+usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
+    [--fast | -f] [--each | -e] [--all | -a] [--username=USER | --user=USER ]
+    [--format=FORMAT]
+EOF
+            exit
             ;;
 
         (*)
