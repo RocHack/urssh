@@ -1,2 +1,140 @@
 #!/usr/bin/env bash
 
+username=jkottas
+
+file=/tmp/urssh
+
+verbose=false
+list=false
+count=false
+fast=true
+
+for arg; do
+    case "$arg" in
+        (-v)
+            verbose=true
+            ;;
+
+        (--list|-l)
+            list=true
+            ;;
+
+        (--fast|-f)
+            fast=true
+            ;;
+
+        (--all|-a)
+            fast=false
+            ;;
+    esac
+done
+
+if ! $list; then
+    count=true
+fi
+
+get_machines()
+{
+    for i in $(seq 3); do
+        echo "$username@cycle${i}.csug.rochester.edu"
+    done
+
+    if echo "$HOSTNAME" | grep -qF cycle; then
+        minors="colvin iroquois haystack hough gothics cliff armstrong skylight marshall redfield wright algonquin panther whiteface"
+        majors="tabletop blake macomb cascade phelps colden porter marcy seward nye sawteeth"
+        for i in $majors $minors; do
+            echo "$username@${i}.csug.rochester.edu"
+        done
+    fi
+}
+
+user_cmd="users | tr ' ' '\n' | sort | uniq | tr '\n' ' '"
+count_user_cmd="users | tr ' ' '\n' | sort | uniq | wc -l"
+count_proc_cmd="grep -F processor /proc/cpuinfo | wc -l"
+
+scale=20
+
+get_machine_users()
+{
+    ! $verbose || echo "sshing into machine '$1'" >&2
+    users="$(ssh "$1" "$user_cmd" 2>/dev/null)"
+    echo "$users"
+}
+
+get_machine_users_count()
+{
+    ! $verbose || echo "sshing into machine '$1'" >&2
+    user_count="$(ssh "$1" "$count_user_cmd" 2>/dev/null)"
+    ! $verbose || echo "machine '$1' has $user_count users" >&2
+    echo "$user_count"
+}
+
+get_machine_proc_count()
+{
+    ! $verbose || echo "sshing into $1" >&2
+    procs="$(ssh "$1" "$count_proc_cmd" 2>/dev/null)"
+    ! $verbose || echo "machine '$1' has $procs processors" >&2
+    echo "$procs"
+}
+
+get_machine_rating()
+{
+    cmd="echo \"scale=$scale; \$($count_user_cmd) / \$($count_proc_cmd)\" | bc"
+    ! $verbose || echo "running '$cmd' on machine '$1'" >&2
+    rating="$(ssh "$1" "$cmd" 2>/dev/null)"
+
+    ! $verbose || echo "machine '$1' has rating $rating" >&2
+    echo "$rating"
+}
+
+wait_for_children()
+{
+    if $fast; then
+        sleep 2
+        pkill -P $$
+    else
+        wait
+    fi
+}
+
+machines="$(get_machines)"
+
+if $count; then
+    >"$file"
+
+    for machine in $machines; do
+        get_machine_rating "$machine"
+    done >"$file"
+
+    machine="$(echo "$machines" | sed -n "$(awk '
+    NR == 1 {
+        min = $0;
+        min_line = 1;
+    }
+
+    NR > 1 {
+        if ($0 < min) {
+            min = $0;
+            min_line = NR;
+        }
+    }
+
+    END {
+        print min_line;
+    }
+    ' "$file")p")"
+
+    ! $verbose || echo "sshing into machine '$machine'" >&2
+
+    ssh "$machine"
+elif $list; then
+    # TODO - optimize this, since it's unnecessarily sshing to each machine
+    # twice
+    for machine in $machines; do
+        (echo "$machine $(get_machine_users_count \
+            "$machine") $(get_machine_users "$machine")") &
+    done
+    wait_for_children
+else
+    echo "error!" >&2
+fi
