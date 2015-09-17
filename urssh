@@ -237,7 +237,7 @@ case "$action" in
         else
             tmpdir="$(mktemp -d)"
             for machine in $machines; do
-                timeout 5 do_ssh "$machine" get_rating >"$tmpdir/$machine" &
+                do_ssh "$machine" get_rating >"$tmpdir/$machine" &
             done
             wait
             min=1000
