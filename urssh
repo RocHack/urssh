@@ -8,6 +8,7 @@ verbose=false
 list=false
 count=false
 fast=true
+each=false
 
 for arg; do
     case "$arg" in
@@ -21,6 +22,10 @@ for arg; do
 
         (--fast|-f)
             fast=true
+            ;;
+
+        (--each)
+            each=true
             ;;
 
         (--all|-a)
@@ -99,7 +104,11 @@ wait_for_children()
 
 machines="$(get_machines)"
 
-if $count; then
+if $each; then
+    for machine in $machines; do
+        ssh "$machine"
+    done
+elif $count; then
     >"$file"
 
     for machine in $machines; do
