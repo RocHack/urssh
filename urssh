@@ -2,23 +2,27 @@
 
 username="$USER"
 format="%u@%m"
+cmd=
 
 verbose=false
 quiet=false
 action=ssh
 fast=true
 each=false
+volume=
 
 for arg; do
     case "$arg" in
         (--verbose|-v)
             verbose=true
             quiet=false
+            volume=-v
             ;;
 
         (--quiet|-q)
             verbose=false
             quiet=true
+            volume=-q
             ;;
 
         (--list|-l)
@@ -60,6 +64,14 @@ EOF
             exit
             ;;
 
+        (--get)
+            action=get
+            ;;
+
+        (--command=*)
+            cmd="$(awk -F= '{print $2}' <<< "$arg")"
+            ;;
+
         (*)
             echo "error: unrecognized argument: $arg" >&2
             exit 1
@@ -67,14 +79,33 @@ EOF
     esac
 done
 
+if [[ -z $cmd ]]; then
+    case "$action" in
+        (list)
+            cmd='echo $(n_uniq_users) $(uniq_users)'
+            ;;
+
+        (ssh)
+            cmd='get_rating'
+            ;;
+
+        (*)
+            echo "This shouldn't happen." >&2
+            exit 1
+            ;;
+    esac
+fi
+
 if $verbose; then
-    echo "username = $username"
-    echo "format   = $format"
-    echo "verbose  = $verbose"
-    echo "quiet    = $quiet"
-    echo "action   = $action"
-    echo "fast     = $fast"
-    echo "each     = $each"
+    echo "username = $username" >&2
+    echo "format   = $format" >&2
+    echo "cmd      = $cmd" >&2
+    echo "verbose  = $verbose" >&2
+    echo "quiet    = $quiet" >&2
+    echo "volume   = $volume" >&2
+    echo "action   = $action" >&2
+    echo "fast     = $fast" >&2
+    echo "each     = $each" >&2
 fi
 
 sub()
@@ -190,22 +221,6 @@ mem_avail     = $(mem_avail)
 EOF
 }
 
-func_cat()
-{
-    local str=
-
-    for arg; do
-        str="$(cat <(echo "$str") <(type "$arg" | tail -n +2))"
-    done
-
-    echo "$str"
-}
-
-funcs="$(func_cat get_users uniq_users n_users n_uniq_users meminfo mem_avail \
-    cpuinfo n_cpus load_avgs load_avgs_avg get_rating)"
-
-! $verbose || echo "$funcs" >&2
-
 do_ssh()
 {
     machine="$1"
@@ -223,40 +238,40 @@ do_ssh()
         ssh_cmd="timeout 3 ssh"
     fi
 
-    cmd="$(cat <(echo "$funcs") <(echo "$2"))"
-
     ! $verbose || echo "MACHINE: $machine" >&2
     ! $verbose || echo "COMMAND: $2" >&2
 
-    result="$($ssh_cmd "$machine" "$cmd")"
-
-    ! $verbose || echo "RESULT:  $result" >&2
-
-    echo "$result"
+    $ssh_cmd "$machine" "$2"
 }
 
 machines="$(get_machines)"
 
 case "$action" in
+    (get)
+        eval "$cmd"
+        ;;
+
     (ssh)
         if $each; then
             for machine in $machines; do
                 $quiet || echo \
                     "sshing into $(format_machine "$machine")"
-                do_ssh "$machine" ". ~/.bashrc"
+                do_ssh "$machine"
             done
         else
             tmpdir="$(mktemp -d)"
+            ! $verbose || echo "tmpdir = $tmpdir" >&2
             for machine in $machines; do
-                do_ssh "$machine" get_rating >"$tmpdir/$machine" &
+                do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
+                    >"$tmpdir/$machine" &
             done
             wait
-            min=1000
+            min=inf
             minmachine=
             for machine in $machines; do
                 rating="$(cat "$tmpdir/$machine")"
-                if [ -n "$rating" ] && [ "$(bc <<< "$rating < $min")" = 1 ]
-                then
+                if [[ -n $rating ]] && [[ $min = inf || \
+                    "$(bc <<< "$rating < $min")" = 1 ]]; then
                     min="$rating"
                     minmachine="$machine"
                 fi
@@ -269,13 +284,13 @@ case "$action" in
         tmpdir="$(mktemp -d)"
         ! $verbose || echo "tmpdir = $tmpdir" >&2
         for machine in $machines; do
-            do_ssh "$machine" 'echo $(n_uniq_users) $(uniq_users)' \
+            do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
                 >"$tmpdir/$machine" &
         done
         wait
         for machine in $machines; do
             info="$(cat "$tmpdir/$machine")"
-            [ -n "$info" ] && echo "$(format_machine "$machine") $info"
+            [[ -n $info ]] && echo "$(format_machine "$machine") $info"
         done
         ;;
 
