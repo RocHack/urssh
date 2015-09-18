@@ -55,21 +55,49 @@ for arg; do
             format="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
 
+        (--command=*)
+            cmd="$(awk -F= '{print $2}' <<< "$arg")"
+            ;;
+
         (--help|-h)
             cat <<EOF
 usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
     [--fast | -f] [--each | -e] [--all | -a] [--username=USER | --user=USER ]
-    [--format=FORMAT]
+    [--format=FORMAT] [--command=COMMAND]
+
+--list - List each computer with some information about that computer. By
+         default, the information is the number of unique users and then the
+         list of unique users. Different information can be gotten by passing
+         --command=COMMAND. COMMAND is eval'd on the remote computer.
+
+--ssh  - Uses heuristics (implemented in get_rating()) to get the best computer
+to ssh into, and then ssh's into that computer.
+
+--each - ssh's into each computer. This is designed to allow shell ~/.*rc
+scripts to run and do any initialization on each computer.
+
+--fast - Opposite of --all. Times out the ssh command so that you don't wait
+all that long for computers that are slow to respond.
+
+--all  - Opposite of --fast. Doesn't timeout the ssh commands, so that you list
+all the computers possible, rather than just the fast ones to respond.
+
+--username=USER - Use USER as the username for ssh.
+
+--format=FORMAT - Use FORMAT for formatting computer names. The format is a
+literal string, but with a few printf-like specifiers:
+    %% - '%'
+    %m - The short computer name
+    %M - The long computer name
+    %u - The username
+
+--command=COMMAND - Specifies a command for --list, or a command
 EOF
             exit
             ;;
 
         (--get)
             action=get
-            ;;
-
-        (--command=*)
-            cmd="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
 
         (*)
