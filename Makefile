@@ -1,7 +1,9 @@
+install_loc=~/bin/
+
 .PHONY: install
 install:
-	cp urssh ~/bin/
+	cp -v urssh $(install_loc)
 
 .PHONY: uninstall
 uninstall:
-	rm -f ~/bin/urssh
+	rm -vf $(install_loc)/urssh
