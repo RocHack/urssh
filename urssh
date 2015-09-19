@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-username="$USER"
+username=
 format="%u@%m"
 cmd=
 
@@ -145,8 +145,13 @@ format_machine()
 {
     local user machine_short machine_long
 
-    user="$(awk -F@ '{print $1}' <<< "$1")"
-    machine_long="$(awk -F@ '{print $2}' <<< "$1")"
+    if grep -qF @ <<< "$1"; then
+        user="$(awk -F@ '{print $1}' <<< "$1")"
+    else
+        # Not necessarily accurate, but the best we can do easily
+        user="$USER"
+    fi
+    machine_long="$(sed "s/^$user@//" <<< "$1")"
     machine_short="$(awk -F. '{print $1}' <<< "$machine_long")"
 
     sed "
@@ -168,15 +173,21 @@ format_machines()
 
 get_machines()
 {
+    if [[ -z $username ]]; then
+        userstring=
+    else
+        userstring="$username@"
+    fi
+
     for i in $(seq 3); do
-        echo "$username@cycle${i}.csug.rochester.edu"
+        echo "${userstring}cycle${i}.csug.rochester.edu"
     done
 
     if echo "$HOSTNAME" | grep -qF cycle; then
         minors="colvin iroquois haystack hough gothics cliff armstrong skylight marshall redfield wright algonquin panther whiteface"
         majors="tabletop blake macomb cascade phelps colden porter marcy seward nye sawteeth"
         for i in $majors $minors; do
-            echo "$username@${i}.csug.rochester.edu"
+            echo "$userstring${i}.csug.rochester.edu"
         done
     fi
 }
