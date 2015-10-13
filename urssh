@@ -184,8 +184,8 @@ get_machines()
     done
 
     if echo "$HOSTNAME" | grep -qF cycle; then
-        minors="colvin iroquois haystack hough gothics cliff armstrong skylight marshall redfield wright algonquin panther whiteface"
-        majors="tabletop blake macomb cascade phelps colden porter marcy seward nye sawteeth"
+        minors="algonquin armstrong cliff colvin gothics haystack hough iroquois marshall panther redfield skylight whiteface wright"
+        majors="blake cascade colden macomb marcy nye phelps porter sawteeth seward tabletop"
         for i in $majors $minors; do
             echo "$userstring${i}.csug.rochester.edu"
         done
