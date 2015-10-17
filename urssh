@@ -114,7 +114,7 @@ if [[ -z $cmd ]]; then
             ;;
 
         (ssh)
-            cmd='get_rating'
+            $each || cmd='get_rating'
             ;;
 
         (*)
@@ -295,7 +295,7 @@ case "$action" in
             for machine in $machines; do
                 $quiet || echo \
                     "sshing into $(format_machine "$machine")"
-                do_ssh "$machine"
+                do_ssh "$machine" "$cmd"
             done
         else
             tmpdir="$(mktemp -d)"
