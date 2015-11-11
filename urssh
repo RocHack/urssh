@@ -74,7 +74,8 @@ usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
 to ssh into, and then ssh's into that computer.
 
 --each - ssh's into each computer. This is designed to allow shell ~/.*rc
-scripts to run and do any initialization on each computer.
+scripts to run and do any global initialization on each computer, or just to
+run some command on each computer.
 
 --fast - Opposite of --all. Times out the ssh command so that you don't wait
 all that long for computers that are slow to respond.
@@ -91,7 +92,11 @@ literal string, but with a few printf-like specifiers:
     %M - The long computer name
     %u - The username
 
---command=COMMAND - Specifies a command for --list, or a command
+--command=COMMAND -
+    For --list, specifies the command to get the output to list for each computer.
+    For --each, specifies a command to run on each computer.
+    For --ssh, specifies the command used to get the rating for each computer -
+        the rating should be a number, with lower numbers being more favorable.
 EOF
             exit
             ;;
