@@ -115,7 +115,7 @@ done
 if [[ -z $cmd ]]; then
     case "$action" in
         (list)
-            cmd='echo $(n_uniq_users) $(uniq_users)'
+            cmd='echo $(n_uniq_users) $(uniq_users | format_locked)'
             ;;
 
         (ssh)
@@ -220,6 +220,24 @@ n_users()
 n_uniq_users()
 {
     uniq_users | wc -l
+}
+
+format_locked()
+{
+    PATH="$PATH:~jkottas/bin"
+    if ! hash screensaver-check 2>/dev/null; then
+        cat
+        return
+    fi
+
+    locked_users="$(screensaver-check)"
+    tr ' ' '\n' | while read -r usr; do
+        if grep -q "^$usr$" <<<"$locked_users"; then
+            printf '%s(?)\n' "$usr"
+        else
+            printf '%s\n' "$usr"
+        fi
+    done
 }
 
 meminfo()
