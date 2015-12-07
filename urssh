@@ -321,7 +321,7 @@ case "$action" in
                 do_ssh "$machine" "$cmd"
             done
         else
-            tmpdir="$(mktemp -d tmp.XXXXXXXX)"
+            tmpdir="$(mktemp -d /tmp/tmp.XXXXXXXX)"
             ! $verbose || echo "tmpdir = $tmpdir" >&2
             for machine in $machines; do
                 do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
@@ -343,7 +343,7 @@ case "$action" in
         ;;
 
     (list)
-        tmpdir="$(mktemp -d tmp.XXXXXXXX)"
+        tmpdir="$(mktemp -d /tmp/tmp.XXXXXXXX)"
         ! $verbose || echo "tmpdir = $tmpdir" >&2
         for machine in $machines; do
             do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
