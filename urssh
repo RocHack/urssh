@@ -7,8 +7,8 @@ cmd=
 verbose=false
 quiet=false
 action=ssh
-fast=true
-each=false
+parallel=true
+timeout=3
 volume=
 
 for arg; do
@@ -33,55 +33,57 @@ for arg; do
             action=ssh
             ;;
 
-        (--fast|-f)
-            fast=true
-            each=false
+        (--run|-r)
+            action=run
             ;;
 
-        (--each|-e)
-            each=true
-            fast=false
+        (--parallel|-p)
+            parallel=true
             ;;
 
-        (--all|-a)
-            fast=false
+        (--sequential|-seq)
+            parallel=false
             ;;
 
-        (--user=*|--username=*)
+        (--each|-e|--all|-a)
+            parallel=false
+            timeout=0
+            ;;
+
+        (--timeout=*|-t=*)
+            timeout="$(awk -F= '{print $2}' <<< "$arg")"
+            ;;
+
+        (--username=*|--user=*|-u=*)
             username="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
 
-        (--format=*)
+        (--format=*|-f=*)
             format="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
 
-        (--command=*)
+        (--command=*|--cmd=*|-c=*)
             cmd="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
 
         (--help|-h)
             cat <<EOF
 usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
-    [--fast | -f] [--each | -e] [--all | -a] [--username=USER | --user=USER ]
-    [--format=FORMAT] [--command=COMMAND]
+    [--run | -r] [--username=USER | --user=USER | -u=USER]
+    [--format=FORMAT | -f=FORMAT] [--timeout=TIMEOUT | -t=TIMEOUT]
+    [--command=COMMAND | --cmd=COMMAND | -c=COMMAND]
 
 --list - List each computer with some information about that computer. By
          default, the information is the number of unique users and then the
-         list of unique users. Different information can be gotten by passing
-         --command=COMMAND. COMMAND is eval'd on the remote computer.
+         list of unique users, but users will have (?) by their username if
+         they're screen is locked. Different information can be gotten by
+         passing a command. COMMAND is eval'd on the remote computer.
 
 --ssh  - Uses heuristics (implemented in get_rating()) to get the best computer
-to ssh into, and then ssh's into that computer.
+         to ssh into, and then sshes into that computer.
 
---each - ssh's into each computer. This is designed to allow shell ~/.*rc
-scripts to run and do any global initialization on each computer, or just to
-run some command on each computer.
-
---fast - Opposite of --all. Times out the ssh command so that you don't wait
-all that long for computers that are slow to respond.
-
---all  - Opposite of --fast. Doesn't timeout the ssh commands, so that you list
-all the computers possible, rather than just the fast ones to respond.
+--run - sshes into each computer and runs the given command on each computer.
+        Ignores command output.
 
 --username=USER - Use USER as the username for ssh.
 
@@ -92,15 +94,22 @@ literal string, but with a few printf-like specifiers:
     %M - The long computer name
     %u - The username
 
+--timeout=TIMEOUT - TIMEOUT should be a nonnegative integer, or blank. It
+                    specifies how many seconds the given command can run on the
+                    remote machine before timing out and being killed. The
+                    default is 3. Setting this to 0 or leaving it blank means
+                    no timeout.
+
 --command=COMMAND -
     For --list, specifies the command to get the output to list for each computer.
-    For --each, specifies a command to run on each computer.
+    For --run, specifies a command to run on each computer.
     For --ssh, specifies the command used to get the rating for each computer -
         the rating should be a number, with lower numbers being more favorable.
 EOF
             exit
             ;;
 
+        # Internal
         (--get)
             action=get
             ;;
@@ -119,7 +128,11 @@ if [[ -z $cmd ]]; then
             ;;
 
         (ssh)
-            $each || cmd='get_rating'
+            cmd='get_rating'
+            ;;
+
+        (run)
+            cmd=true
             ;;
 
         (*)
@@ -131,14 +144,14 @@ fi
 
 if $verbose; then
     echo "username = $username" >&2
-    echo "format   = $format" >&2
-    echo "cmd      = $cmd" >&2
-    echo "verbose  = $verbose" >&2
-    echo "quiet    = $quiet" >&2
-    echo "volume   = $volume" >&2
-    echo "action   = $action" >&2
-    echo "fast     = $fast" >&2
-    echo "each     = $each" >&2
+    echo "format   = $format"   >&2
+    echo "cmd      = $cmd"      >&2
+    echo "verbose  = $verbose"  >&2
+    echo "quiet    = $quiet"    >&2
+    echo "action   = $action"   >&2
+    echo "parallel = $parallel" >&2
+    echo "timeout  = $timeout"  >&2
+    echo "volume   = $volume"   >&2
 fi
 
 sub()
@@ -287,17 +300,13 @@ do_ssh()
 {
     machine="$1"
     ssh_cmd=ssh
-    if $fast; then
-        ssh_cmd="timeout 2 ssh"
+    if [ -n "$timeout" ] && [ "$timeout" != 0 ]; then
+        ssh_cmd="timeout $timeout ssh"
     fi
 
     if ! $ssh_cmd "$machine" true 2>/dev/null; then
         $quiet || echo "Unable to ssh into $(format_machine "$machine")" >&2
         return 1
-    fi
-
-    if $fast; then
-        ssh_cmd="timeout 3 ssh"
     fi
 
     ! $verbose || echo "MACHINE: $machine" >&2
@@ -308,52 +317,56 @@ do_ssh()
 
 machines="$(get_machines)"
 
+ssh_all()
+{
+    tmpdir="$(mktemp -d /tmp/tmp.XXXXXXXX)"
+    ! $verbose || echo "tmpdir = $tmpdir" >&2
+
+    if $parallel; then
+        for machine in $machines; do
+            do_ssh "$machine" "$1" >"$tmpdir/$machine" &
+        done
+        wait
+    else
+        for machine in $machines; do
+            $quiet || echo "sshing into $(format_machine "$machine")" >&2
+            do_ssh "$machine" "$1" >"$tmpdir/$machine"
+        done
+    fi
+
+    echo "$tmpdir"
+}
+
 case "$action" in
     (get)
         eval "$cmd"
         ;;
 
     (ssh)
-        if $each; then
-            for machine in $machines; do
-                $quiet || echo \
-                    "sshing into $(format_machine "$machine")"
-                do_ssh "$machine" "$cmd"
-            done
-        else
-            tmpdir="$(mktemp -d /tmp/tmp.XXXXXXXX)"
-            ! $verbose || echo "tmpdir = $tmpdir" >&2
-            for machine in $machines; do
-                do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
-                    >"$tmpdir/$machine" &
-            done
-            wait
-            min=inf
-            minmachine=
-            for machine in $machines; do
-                rating="$(cat "$tmpdir/$machine")"
-                if [[ -n $rating ]] && [[ $min = inf || \
-                    "$(bc <<< "$rating < $min")" = 1 ]]; then
-                    min="$rating"
-                    minmachine="$machine"
-                fi
-            done
-            exec ssh "$minmachine"
-        fi
+        tmpdir="$(ssh_all "urssh $volume --get --command='$cmd'")"
+        min=inf
+        minmachine=
+        for machine in $machines; do
+            rating="$(cat "$tmpdir/$machine")"
+            if [ -n "$rating" ] && ( [ "$min" = inf ] ||
+                [ "$(bc <<< "$rating < $min")" = 1 ] ); then
+                min="$rating"
+                minmachine="$machine"
+            fi
+        done
+        exec ssh "$minmachine"
         ;;
 
     (list)
-        tmpdir="$(mktemp -d /tmp/tmp.XXXXXXXX)"
-        ! $verbose || echo "tmpdir = $tmpdir" >&2
-        for machine in $machines; do
-            do_ssh "$machine" "urssh $volume --get '--command=$cmd'" \
-                >"$tmpdir/$machine" &
-        done
-        wait
+        tmpdir="$(ssh_all "urssh $volume --get --command='$cmd'")"
         for machine in $machines; do
             info="$(cat "$tmpdir/$machine")"
             [[ -n $info ]] && echo "$(format_machine "$machine") $info"
         done
+        ;;
+
+    (run)
+        ssh_all "$cmd" >/dev/null
         ;;
 
     (*)
