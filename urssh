@@ -10,6 +10,7 @@ action=ssh
 parallel=true
 timeout=3
 volume=
+computers=
 
 for arg; do
     case "$arg" in
@@ -50,6 +51,18 @@ for arg; do
             timeout=0
             ;;
 
+        (--majors)
+            computers="$computers majors"
+            ;;
+
+        (--minors)
+            computers="$computers minors"
+            ;;
+
+        (--cycles)
+            computers="$computers cycles"
+            ;;
+
         (--timeout=*|-t=*)
             timeout="$(awk -F= '{print $2}' <<< "$arg")"
             ;;
@@ -69,7 +82,8 @@ for arg; do
         (--help|-h)
             cat <<EOF
 usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
-    [--run | -r] [--username=USER | --user=USER | -u=USER]
+    [--run | -r] [--majors] [--minors] [--cycles]
+    [--username=USER | --user=USER | -u=USER]
     [--format=FORMAT | -f=FORMAT] [--timeout=TIMEOUT | -t=TIMEOUT]
     [--command=COMMAND | --cmd=COMMAND | -c=COMMAND]
 
@@ -84,6 +98,12 @@ usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
 
 --run - sshes into each computer and runs the given command on each computer.
         Ignores command output.
+
+--majors,--minors,--cycles - sshes into computers in the major's lab, computers
+                             in the minor's lab, and the cycle servers,
+                             respectively. Can be combined. Default is all
+                             computers when on the a cycle server, and just the
+                             cycles otherwise.
 
 --username=USER - Use USER as the username for ssh.
 
@@ -197,17 +217,34 @@ get_machines()
         userstring="$username@"
     fi
 
-    for i in $(seq 3); do
-        echo "${userstring}cycle${i}.csug.rochester.edu"
+    if [[ -z $computers ]]; then
+        if echo "$HOSTNAME" | grep -qF cycle; then
+            computers="cycles majors minors"
+        else
+            computers="cycles"
+        fi
+    fi
+
+    c=
+    for comp in $computers; do
+        case "$comp" in
+            (majors)
+                c="$c blake cascade colden macomb marcy nye phelps porter sawteeth seward tabletop"
+                ;;
+
+            (minors)
+                c="$c algonquin armstrong cliff colvin gothics haystack hough iroquois marshall panther redfield skylight whiteface wright"
+                ;;
+
+            (cycles)
+                c="$c cycle1 cycle2 cycle3"
+                ;;
+        esac
     done
 
-    if echo "$HOSTNAME" | grep -qF cycle; then
-        minors="algonquin armstrong cliff colvin gothics haystack hough iroquois marshall panther redfield skylight whiteface wright"
-        majors="blake cascade colden macomb marcy nye phelps porter sawteeth seward tabletop"
-        for i in $majors $minors; do
-            echo "$userstring${i}.csug.rochester.edu"
-        done
-    fi
+    for comp in $c; do
+        echo "$userstring${comp}.csug.rochester.edu"
+    done
 }
 
 get_formated_machines()
