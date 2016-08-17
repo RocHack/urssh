@@ -90,7 +90,7 @@ usage: $0 [--verbose | -v] [--quiet | -q] [--list | -l] [--ssh | -s]
 --list - List each computer with some information about that computer. By
          default, the information is the number of unique users and then the
          list of unique users, but users will have (?) by their username if
-         they're screen is locked. Different information can be gotten by
+         their screen is locked. Different information can be gotten by
          passing a command. COMMAND is eval'd on the remote computer.
 
 --ssh  - Uses heuristics (implemented in get_rating()) to get the best computer
